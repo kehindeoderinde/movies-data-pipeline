@@ -1,12 +1,17 @@
+'''EXTRACTION MODULE'''
+
 import os
 import math
 import requests
 import pandas as pd
-import numpy as np
+from dotenv import load_dotenv
 
-API_URL = 'http://www.omdbapi.com/'
-API_KEY = '58cf03e2'
-SEARCH_STRING = 'black panther'
+# Load environment variables into application
+load_dotenv()
+
+API_URL = os.getenv('API_URL')
+API_KEY = os.getenv('API_KEY')
+SEARCH_STRING = os.getenv('SEARCH_STRING')
 
 def get_movie_ids_from_search (search_string: str) -> pd.DataFrame | str :
     '''Function to extract all ids from movies retrieved from serach results'''
@@ -80,5 +85,3 @@ def export_dataframe_to_csv (df : pd.DataFrame) :
 
     df.to_csv(f'extracted_data/{SEARCH_STRING}/search_results.csv')
     print(f'Extraction complete! File at extracted_data/{SEARCH_STRING}')
-    
-export_dataframe_to_csv(get_full_movie_data_by_ids(get_movie_ids_from_search(SEARCH_STRING)))
