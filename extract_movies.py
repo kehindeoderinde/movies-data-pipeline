@@ -1,73 +1,84 @@
-'''Extraction script'''
-
 import os
 import math
 import requests
 import pandas as pd
-
+import numpy as np
 
 API_URL = 'http://www.omdbapi.com/'
 API_KEY = '58cf03e2'
-SEARCH_STRING = 'avengers'
+SEARCH_STRING = 'black panther'
 
-def get_movie_ids_by_search (s: str) -> list | str :
-    """Function to search movies iteratively from OMDB API"""
-    imdb_ids = []
+def get_movie_ids_from_search (search_string: str) -> pd.DataFrame | str :
+    '''Function to extract all ids from movies retrieved from serach results'''
     
-    if len(s) < 3:
+    if len(SEARCH_STRING) < 3 :
         return 'Cannot fetch results if search string is less than 3'
-    else:
-        r = requests.get(API_URL, params={'apikey': API_KEY, 's': s}, timeout=30)
-        res = r.json()
-        if res['Response'] == 'True':
-            ids = [movie['imdbID'] for movie in res['Search']]
-            imdb_ids.extend(ids)
-            page = 1
-            num_of_pages = math.ceil(int(res['totalResults'])/len(res['Search']))
-            
-            if num_of_pages > 1:
-                page += 1
-                while page <= num_of_pages :
-                    new_r  = requests.get(API_URL, params={'apikey': API_KEY, 's': s, 'page': page}, timeout=30)
-                    new_res = new_r.json()
-                    ids = [movie['imdbID'] for movie in new_res['Search']]
-                    imdb_ids.extend(ids)
-                    page += 1
-                    
-            return imdb_ids
-        else:
-            return res['Error']
-
-def get_extended_data (movie_ids: list | str) -> pd.DataFrame:
-    """Function to fetch extended data for searched movies from OMDB API"""
-    if isinstance(movie_ids, str):
-        return movie_ids
-    else:
-        movies_df = pd.DataFrame()
     
-        for movie_id in movie_ids:
-            r = requests.get(API_URL, params={'apikey': API_KEY, 'i': movie_id}, timeout=300)
-            res = r.json()
-            temp_df = pd.json_normalize(res)
-            movies_df = pd.concat([movies_df, temp_df], ignore_index=0)
+    else :
+        ids = []
+        r = requests.get(f'{API_URL}', params={'apikey': API_KEY, 's': search_string}, timeout=30)
+        res = r.json()
         
-        movies_df = movies_df.set_index('imdbID')
-        
-        return movies_df
-
-def save_results_dataframe_to_csv (df: pd.DataFrame | str):
-    if isinstance(df, str):
-        print(df)
-    else:
-        path = f'extracted_data/{SEARCH_STRING}'
-        if os.path.exists(path=path):
-            print(f'Folder path {path} to save search results already exists')
+        if res['Response'] == 'False':
+            return res['Error']
         else:
-            os.makedirs(path)
-            print(f'Folder path {path} created')
+            movie_ids = [movie['imdbID'] for movie in res['Search']]
+        
+            num_per_page = len(res['Search'])
+            total_results = int(res['totalResults'])
             
-        df.to_csv(f'{path}/search_results.csv')
-        print(f'Dataframe with search results for {SEARCH_STRING} exported to CSV file at {path}')
+            print(f'{total_results} results found for movie "{SEARCH_STRING}"')
+            
+            total_pages = math.ceil(total_results/num_per_page)
+            ids.extend(movie_ids)
+            
+            print('Extracting unique ids from search results')
+            
+            if total_results % num_per_page > 1:
+                page = 1
+                page += 1
+                while page <= total_pages:
+                    r = requests.get(f'{API_URL}', params={'apikey': API_KEY, 's': search_string, 'page': page}, timeout=30)
+                    res = r.json()
+                    movie_ids = [movie['imdbID'] for movie in res['Search']]
+                    ids.extend(movie_ids)
+                    page += 1
+                    print(f'{round(len(ids)/total_results * 100, 2)}% extraction complete')
+            print(f'{len(ids)} movie ids returned from search')  
+            return ids
+        
+def get_full_movie_data_by_ids (ids : list | str) -> pd.DataFrame :
+    '''Get full movie data using ids from API'''
+    if isinstance(ids, str):
+        return ids
+    else:
+        print(ids)
+        print('Collating movie data into dataframe for analysis')
+        base_df = pd.DataFrame()
+        for movie_id in ids:
+            r = requests.get(f'{API_URL}', params={'apikey': API_KEY, 'i': movie_id}, timeout=30)
+            res = r.json()
+            df = pd.json_normalize(res)
+            # ratings_df = pd.json_normalize(res, record_path='Ratings')
+            # print(ratings_df)
+            base_df = pd.concat([base_df, df], ignore_index=True)
+            print(f'{round(base_df["imdbID"].count()/len(ids) * 100, 2)}% collation complete')
+        
+        base_df = base_df.set_index('imdbID')
+        
+        return base_df
 
-save_results_dataframe_to_csv(get_extended_data(get_movie_ids_by_search(SEARCH_STRING)))
+def export_dataframe_to_csv (df : pd.DataFrame) :
+    '''Load extracted movie data into CSV'''
+    print(f'Exporting dataframe to CSV into extracted_data/{SEARCH_STRING} folder')
+    print('Checking if folder exists')
+    if os.path.exists(f'extracted_data/{SEARCH_STRING}'):
+        print(f'Folder extracted_data/{SEARCH_STRING} found! Exporting data')
+    else:
+        print('No folder found! Creating folder and exporting data')
+        os.makedirs(f'extracted_data/{SEARCH_STRING}')
 
+    df.to_csv(f'extracted_data/{SEARCH_STRING}/search_results.csv')
+    print(f'Extraction complete! File at extracted_data/{SEARCH_STRING}')
+    
+export_dataframe_to_csv(get_full_movie_data_by_ids(get_movie_ids_from_search(SEARCH_STRING)))
