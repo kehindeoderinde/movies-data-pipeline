@@ -5,13 +5,13 @@ from multiprocessing import Process
 from multiprocessing import freeze_support
 from dotenv import load_dotenv
 import psycopg2 as postgres
-from movies.extract_movies import (
+from src.extract_movies import (
     get_movie_ids_from_search,
     get_full_movie_data_by_ids,
     export_dataframe_to_csv,
 )
 
-from movies.transform_movies import transform_csv_extract
+from src.transform_movies import transform_csv_extract
 
 # Load environment variables into application
 load_dotenv()
@@ -37,9 +37,9 @@ def init():
     '''Initialize application'''
     
     # Extract movies data from API and load CSV to local/storage account
-    # movie_ids = get_movie_ids_from_search(SEARCH_STRING)
-    # movies_df = get_full_movie_data_by_ids(movie_ids)
-    # export_dataframe_to_csv(movies_df)
+    movie_ids = get_movie_ids_from_search(SEARCH_STRING)
+    movies_df = get_full_movie_data_by_ids(movie_ids)
+    export_dataframe_to_csv(movies_df)
 
     # Transform and clean dataset loading CSV from local/storage account
     transform_csv_extract()
