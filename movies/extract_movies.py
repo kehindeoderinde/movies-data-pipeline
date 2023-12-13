@@ -2,6 +2,7 @@
 
 import os
 import math
+import multiprocessing
 import requests
 import pandas as pd
 from dotenv import load_dotenv
@@ -48,28 +49,36 @@ def get_movie_ids_from_search (search_string: str) -> pd.DataFrame | str :
                     movie_ids = [movie['imdbID'] for movie in res['Search']]
                     ids.extend(movie_ids)
                     page += 1
-                    print(f'{round(len(ids)/total_results * 100, 2)}% extraction complete')
+                    # print(f'{round(len(ids)/total_results * 100, 2)}% extraction complete')
             print(f'{len(ids)} movie ids returned from search')  
             return ids
+        
+def fetch_movie_by_id (movie_id: int) -> pd.DataFrame:
+    '''Fetch movie from URL'''
+    r = requests.get(f'{API_URL}', params={'apikey': API_KEY, 'i': movie_id}, timeout=30)
+    res = r.json()
+    df = pd.json_normalize(res)
+    return df
         
 def get_full_movie_data_by_ids (ids : list | str) -> pd.DataFrame :
     '''Get full movie data using ids from API'''
     if isinstance(ids, str):
         return ids
     else:
-        print(ids)
         print('Collating movie data into dataframe for analysis')
         base_df = pd.DataFrame()
-        for movie_id in ids:
-            r = requests.get(f'{API_URL}', params={'apikey': API_KEY, 'i': movie_id}, timeout=30)
-            res = r.json()
-            df = pd.json_normalize(res)
-            # ratings_df = pd.json_normalize(res, record_path='Ratings')
-            # print(ratings_df)
-            base_df = pd.concat([base_df, df], ignore_index=True)
-            print(f'{round(base_df["imdbID"].count()/len(ids) * 100, 2)}% collation complete')
         
-        base_df = base_df.set_index('imdbID')
+        with multiprocessing.Pool(4) as pool:
+            movie_dfs = pool.map(fetch_movie_by_id, ids)
+            
+            print('Merging collated dataframes into master dataframe')
+            for movie_df in movie_dfs:
+                base_df = pd.concat([base_df, movie_df], ignore_index=True)
+            
+            print('Merge complete')       
+            
+        base_df = base_df.rename(columns={'imdbID': 'movie_id'})
+        base_df = base_df.set_index('movie_id')
         
         return base_df
 
